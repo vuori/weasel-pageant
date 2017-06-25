@@ -27,7 +27,7 @@ Most importantly, all interaction with the Win32 world happens with the credenti
 the user who started the WSL environment. In practice, *if you allow someone else to
 log in to your WSL environment remotely, they can access the SSH keys stored in your
 Pageant with `weasel-pageant`.* This is a fundamental part of how WSL works; if you
-are not sure of what you're doing, do not  allow remote access to your WSL enviroment
+are not sure of what you're doing, do not  allow remote access to your WSL environment
 (i.e. by starting an SSH server).
 
 **COMPATIBILITY NOTICE:** `weasel-pageant` does not, and will never work on
@@ -60,7 +60,7 @@ A VS2017 project is included. You will need the "Desktop development with C++" a
    in Options → Cross Platform → Connection Manager.
 
 2. Optional: If you intend to work on the Linux sources, copy the contents of
-   `/usr/include` into `weasel-pageant/include` under the project directory.
+   `/usr/include` into `linux/include` under the project directory.
    This is not required for the build, but will make Intellisense more useful.
 
 3. Hit Build Solution and both the Linux executable and the Win32 helper will be built.
