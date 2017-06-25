@@ -44,11 +44,12 @@ If you are still using Anniversary Update, you may be able to use the (unrelated
 
 ### From binaries
 
-Download the zip file from the releases page and unpack it in a convenient location
-*on the Windows part of your drive*. Because WSL can only execute Win32 binaries from
-`drvfs` locations, `weasel-pageant` *will not work* if unpacked inside the WSL
-filesystem (onto an `lxfs` mount). (Advanced users may place only `helper.exe` on
-`drvfs`, but in general it is easier to keep the pieces together.)
+Download the zip file from the [releases page](https://github.com/vuori/weasel-pageant/releases)
+and unpack it in a convenient location *on the Windows part of your drive*.
+Because WSL can only execute Win32 binaries from `drvfs` locations, `weasel-pageant`
+*will not work* if unpacked inside the WSL filesystem (onto an `lxfs` mount).
+(Advanced users may place only `helper.exe` on `drvfs`, but in general it is easier
+to keep the pieces together.)
 
 ### From source
 
@@ -152,8 +153,8 @@ to your shell initialization files (i.e. `.bashrc`).
 
 ## Contributions
 
-Please send bug reports using Github's Issues feature. Pull requests are also
-welcome, though if you intend to do major changes it's recommended to open an
+Please send bug reports using Github's [issues feature](https://github.com/vuori/weasel-pageant/issues).
+Pull requests are also welcome, though if you intend to do major changes it's recommended to open an
 issue first.
 
 ------------------------------------------------------------------------------
