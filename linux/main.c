@@ -1,21 +1,28 @@
 /*
- * ssh-pageant main code.
- * Copyright (C) 2009-2015  Josh Stone
+ * weasel-pageant Linux-side main code.
+ * 
+ * Copyright 2017  Valtteri Vuorikoski
+ * Based on ssh-pageant, Copyright 2009-2015  Josh Stone
  *
- * This file is part of ssh-pageant, and is free software: you can
+ * This file is part of weasel-pageant, and is free software: you can
  * redistribute it and/or modify it under the terms of the GNU General
  * Public License as published by the Free Software Foundation, either
  * version 3 of the License, or (at your option) any later version.
  */
 
 #include <errno.h>
+#include <err.h>
 #include <getopt.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <libgen.h>
 #include <limits.h>
 #include <stdint.h>
+#include <stdarg.h>
+#include <spawn.h>
+#include <fcntl.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -23,19 +30,34 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <arpa/inet.h>  // needed by common.h
 
-#define AGENT_MAX_MSGLEN  8192
+#include "common.h"
+
+// WSL (at least as of CU) seems to have a strange problem with pipe passing
+// when multiple sockets are open (the handles are non-functional when they
+// arrive on the Win32 side). When this is defined, the helper is started
+// early and restart won't be attempted if the helper exits.
+#define HELPER_EARLY_START 1
 
 #define FD_FOREACH(fd, set) \
     for (fd = 0; fd < FD_SETSIZE; ++fd) \
         if (FD_ISSET(fd, set))
 
-typedef enum {BOURNE, C_SH, FISH} shell_type;
+typedef enum {UNKNOWN, BOURNE, C_SH, FISH} shell_type;
 
 struct fd_buf {
-    int recv, send;
-    char buf[AGENT_MAX_MSGLEN];
+    ssize_t recv, send;
+    uint8_t buf[AGENT_MAX_MSGLEN];
 };
+
+static int opt_debug = 0;
+
+static pid_t subcommand_pid = 0;
+static pid_t win32_pid = 0;
+static int win32_in = -1;  // input from the win32 helper (connected to its stdout)
+static int win32_out = -1;  // output to the win32 helper (connected to its stdin)
+static char win32_helper_path[PATH_MAX] = "./helper.exe";
 
 static char cleanup_tempdir[PATH_MAX] = "";
 static char cleanup_sockpath[PATH_MAX] = "";
@@ -43,13 +65,24 @@ static char cleanup_sockpath[PATH_MAX] = "";
 
 static void cleanup_exit(int status) __attribute__((noreturn));
 static void cleanup_warn(const char *prefix) __attribute__((noreturn));
-static void cleanup_signal(int sig) __attribute__((noreturn));
+static void cleanup_signal(int sig);
 
 static void do_agent_loop(int sockfd) __attribute__((noreturn));
 
 
-static inline int msglen(const void *p) {
-	return 4 + ntohl(*(const uint32_t *)p);
+static void
+debug_print(const char *fmt, ...)
+{
+	if (!opt_debug)
+		return;
+
+	va_list ap;
+
+	fprintf(stderr, "main DEBUG: ");
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+	fprintf(stderr, "\n");
 }
 
 
@@ -71,17 +104,53 @@ cleanup_warn(const char *prefix)
 
 
 static void
+cleanup_win32(int need_wait)
+{
+#if HELPER_EARLY_START
+	// When early start is necessary we have no hope of restarting
+	warnx("win32 helper has stopped; bailing out");
+	cleanup_exit(1);
+#else
+	if (win32_in > 0) {
+		close(win32_in);
+		win32_in = 0;
+	}
+
+	if (win32_out > 0) {
+		close(win32_out);
+		win32_out = 0;
+	}
+
+	// used is used by the query function if it detects an EOF
+	if (need_wait && win32_pid > 0)
+		waitpid(win32_pid, NULL, 0);
+
+	win32_pid = 0;
+#endif
+}
+
+
+static void
 cleanup_signal(int sig)
 {
     // Most caught signals are basically just treated as exit notifiers,
     // but when a child exits, copy its exit status so ssh-pageant is more
     // effective as a command wrapper.
     int status = 0;
-    if (sig == SIGCHLD && wait(&status) > 0) {
-        if (WIFEXITED(status))
-            status = WEXITSTATUS(status);
-        else if (WIFSIGNALED(status))
-            status = 128 + WTERMSIG(status);
+    if (sig == SIGCHLD) {
+		if (subcommand_pid > 0 && waitpid(subcommand_pid, &status, WNOHANG) > 0) {
+			// The subcommand exited. Fall through to cleanup.
+			if (WIFEXITED(status))
+				status = WEXITSTATUS(status);
+			else if (WIFSIGNALED(status))
+				status = 128 + WTERMSIG(status);
+		}
+		else if (win32_pid > 0 && waitpid(win32_pid, NULL, WNOHANG) > 0) {
+			// The win32 helper process exited. Clean up after it, the message handler
+			// will restart it.
+			cleanup_win32(0);
+			return;
+		}
     }
     cleanup_exit(status);
 }
@@ -96,7 +165,7 @@ create_socket_path(char* sockpath, size_t len)
         cleanup_warn("mkdtemp");
 
     // NB: Don't set cleanup_tempdir until after it's created
-    strlcpy(cleanup_tempdir, tempdir, sizeof(cleanup_tempdir));
+    strncpy(cleanup_tempdir, tempdir, sizeof(cleanup_tempdir));
 
     snprintf(sockpath, len, "%s/agent.%d", tempdir, getpid());
 }
@@ -114,7 +183,7 @@ open_auth_socket(const char* sockpath)
     if (fd < 0)
         cleanup_warn("socket");
 
-	strlcpy(addr.sun_path, sockpath, sizeof(addr.sun_path));
+	strncpy(addr.sun_path, sockpath, sizeof(addr.sun_path));
     addr.sun_family = AF_UNIX;
 
     um = umask(S_IXUSR | S_IRWXG | S_IRWXO);
@@ -123,12 +192,24 @@ open_auth_socket(const char* sockpath)
     umask(um);
 
     // NB: Don't set cleanup_sockpath until after it's bound
-    strlcpy(cleanup_sockpath, sockpath, sizeof(cleanup_sockpath));
+    strncpy(cleanup_sockpath, sockpath, sizeof(cleanup_sockpath));
 
     if (listen(fd, 128) < 0)
         cleanup_warn("listen");
 
     return fd;
+}
+
+
+static int
+path_is_socket(const char *path)
+{
+	struct stat st;
+	if (stat(path, &st) == 0) {
+		if (S_ISSOCK(st.st_mode))
+			return 1;
+	}
+	return 0;
 }
 
 
@@ -139,42 +220,213 @@ static int
 reuse_socket_path(const char* sockpath)
 {
     struct sockaddr_un addr;
-    int fd;
+	int fd;
 
     fd = socket(PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
         cleanup_warn("socket");
 
     addr.sun_family = AF_UNIX;
-    strlcpy(addr.sun_path, sockpath, sizeof(addr.sun_path));
-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
-        // The sockpath is already accepting connections -- reuse!
-        close(fd);
-        return 1;
-    }
-    else if (errno == ENOENT)
-        return 0;
-    else if (errno == ECONNREFUSED) {
-        // Either it's not listening, or not a socket at all.  If it was at
-        // least a socket, remove it so it can be replaced.
-        if (path_is_socket(sockpath)) {
-            if (unlink(sockpath) < 0)
-                cleanup_warn("unlink");
-            return 0;
-        }
+    strncpy(addr.sun_path, sockpath, sizeof(addr.sun_path));
+	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == 0) {
+		// The sockpath is already accepting connections -- reuse!
+		close(fd);
+		return 1;
+	}
+	else if (errno == ENOENT) {
+		close(fd);
+		return 0;
+	}
+	else if (errno == ECONNREFUSED) {
+		// Either it's not listening, or not a socket at all.  If it was at
+		// least a socket, remove it so it can be replaced.
+		if (path_is_socket(sockpath)) {
+			if (unlink(sockpath) < 0)
+				cleanup_warn("unlink");
 
-        // Restore the errno before warning out.
-        errno = ECONNREFUSED;
-    }
-    cleanup_warn("connect");
+			close(fd);
+			return 0;
+		}
+
+		// Restore the errno before warning out.
+		errno = ECONNREFUSED;
+	}
+	cleanup_warn("connect");
+}
+
+
+static int
+start_win32_helper()
+{
+	posix_spawn_file_actions_t action;
+	int out_pipe[2], in_pipe[2];
+	char child_arg[9];
+	char *argv[] = { win32_helper_path, child_arg, NULL };
+	char *cwd;
+	int result = 0;
+
+	if (win32_in > 0 && win32_out > 0)
+		return result;  // already running
+
+	// Serialize flags to child
+	int child_flags = 0;
+	if (opt_debug)
+		child_flags |= WSLP_CHILD_FLAG_DEBUG;
+	snprintf(child_arg, 9, "%08d", child_flags);
+
+	// Set up the pipes to be used as stdin/stdout
+	if (pipe2(out_pipe, O_CLOEXEC) < 0 || pipe2(in_pipe, O_CLOEXEC) < 0)
+		cleanup_warn("start_win32_helper pipe");
+
+	win32_in = in_pipe[0];  // our input, helper's output
+	win32_out = out_pipe[1];  // our output, helper's input
+
+	posix_spawn_file_actions_init(&action);
+
+	// Set up stdin/stdout. The original files will be closed at exec.
+	posix_spawn_file_actions_adddup2(&action, in_pipe[1], STDOUT_FILENO);
+	posix_spawn_file_actions_adddup2(&action, out_pipe[0], STDIN_FILENO);
+
+	// Change to (hopefully) a DrvFs filesystem. Otherwise a warning about changing
+	// the directory may be shown. In the future, this should check /proc/mounts for
+	// a DrvFs path instead of assuming the C: drive is present.
+	if ((cwd = get_current_dir_name()) != NULL) {
+		if (chdir("/mnt/c") < 0)
+			debug_print("could not chdir to DrvFs (%d)\n", errno);
+	}
+
+	// Start it
+	if (posix_spawn(&win32_pid, win32_helper_path, &action, NULL, argv, environ) != 0) {
+		// Display warning and clean up instead of exiting, in case the user is updating the helper
+		warn("start_win32_helper failed to start helper %s", win32_helper_path);
+		cleanup_win32(0);
+		result = -1;
+	}
+
+	// Restore the original working directory. It would be nice if spawn() supported
+	// this directly.
+	if (cwd != NULL) {
+		chdir(cwd);
+		free(cwd);
+	}
+
+	// Close the files passed to the child.
+	close(in_pipe[1]);
+	close(out_pipe[0]);
+	posix_spawn_file_actions_destroy(&action);
+
+	if (result == 0) {
+		// Read the initialization byte from the child to verify that it has started
+		ssize_t initcnt;
+		char initchar;
+
+		initcnt = read(win32_in, &initchar, 1);
+		if (initcnt < 0)
+			cleanup_warn("could not read init byte from win32 helper");
+		else if (initcnt == 0) {
+			warnx("win32 helper died immediately");
+			cleanup_exit(1);
+		}
+		else if (initchar != 'a') {
+			warnx("win32 helper returned unexpected init byte %x", initchar);
+			cleanup_exit(1);
+		}
+		debug_print("got init byte %x='%c'", initchar, initchar);
+	}
+
+	return result;
 }
 
 
 static int
 agent_query(void *buf)
 {
-	// TODO: start process (if needed)
-	// TODO: hand query to process
+#if !HELPER_EARLY_START
+	if (start_win32_helper() != 0)
+		return -1;
+#endif
+
+	// Subprocess has been started (though it may still fail, but at least the spawn finished)
+
+	size_t rem = msglen(buf);
+	ssize_t cnt;
+	void *bufp = buf;
+	int first_done = 0;
+
+	while (rem > 0) {
+		cnt = write(win32_out, bufp, rem);
+		if (cnt < 0) {
+			switch (errno) {
+			case EINTR:
+				continue;
+
+			case EPIPE:
+				// The helper has closed its input; try to restart
+				cleanup_win32(1);
+#if !HELPER_EARLY_START
+				if (!first_done) {
+					warn("win32 helper had exited; trying to restart");
+					if (start_win32_helper() != 0)
+						return -1;
+					first_done = 1;  // not actually done, but don't retry infinitely
+					continue;
+				}
+#endif
+				warn("win32 helper exited during query (write); aborting");
+				return -1;
+
+			default:
+				// These shouldn't happen, bail completely
+				cleanup_warn("agent_query write");
+				break;
+			}
+		}
+
+		// Write succeeded
+		first_done = 1;
+		rem -= (size_t) cnt;
+		bufp += cnt;
+	}
+
+	first_done = 0;
+	rem = 4; // start with 4-byte length
+	bufp = buf;
+	while (rem > 0) {
+		cnt = read(win32_in, bufp, rem);
+		if (cnt < 0) {
+			switch (errno) {
+			case EINTR:
+				continue;
+
+			default:
+				cleanup_warn("agent_query read");
+				break;
+			}
+		}
+		else if (cnt == 0) {
+			// End of file on pipe, the helper went away
+			warn("win32 helper exited during query (read, rem=%llu); aborting", rem);
+			cleanup_win32(1);
+			return -1;
+		}
+
+		rem -= (size_t) cnt;
+		bufp += cnt;
+
+		if (!first_done) {
+			// Waiting for body size, see if we have it
+			if (rem != 0)
+				continue;  // nope
+
+			rem = msglen(buf) - 4;  // yep, reset remaining to body size
+			if (rem > (AGENT_MAX_MSGLEN - 4)) {  // dummy size
+				warn("win32 helper tried to return %llu bytes; aborting");
+				cleanup_win32(1);
+				return -1;
+			}
+			first_done = 1;
+		}
+	}
 
 	return 0;
 }
@@ -183,7 +435,7 @@ agent_query(void *buf)
 static int
 agent_recv(int fd, struct fd_buf *p)
 {
-    int len = recv(fd, p->buf + p->recv, sizeof(p->buf) - p->recv, 0);
+    ssize_t len = recv(fd, p->buf + p->recv, sizeof(p->buf) - (size_t)p->recv, 0);
     if (len <= 0) {
         if (len < 0)
             warn("recv(%d)", fd);
@@ -192,7 +444,7 @@ agent_recv(int fd, struct fd_buf *p)
 
     p->recv += len;
     if (p->recv < 4 || p->recv < msglen(p->buf))
-        return 0;
+        return 0;  // more to recv
 
     if (p->recv > msglen(p->buf)) {
         warnx("recv(%d) = %d (expected %d)",
@@ -205,14 +457,14 @@ agent_recv(int fd, struct fd_buf *p)
 		return -1;
 
     p->send = 0;
-    return 1;
+    return 1;  // recv done, move to send phase
 }
 
 
 static int
 agent_send(int fd, struct fd_buf *p)
 {
-    int len = send(fd, p->buf + p->send, msglen(p->buf) - p->send, 0);
+    ssize_t len = send(fd, p->buf + p->send, (size_t)(msglen(p->buf) - p->send), 0);
     if (len < 0) {
         warn("send(%d)", fd);
         return -1;
@@ -220,7 +472,7 @@ agent_send(int fd, struct fd_buf *p)
 
     p->send += len;
     if (p->send < msglen(p->buf))
-        return 0;
+        return 0;  // more to send
 
     if (p->send > msglen(p->buf)) {
         warnx("send(%d) = %d (expected %d)",
@@ -344,6 +596,7 @@ get_shell_guess()
     return detected_shell;
 }
 
+
 static void
 output_unset_env(const shell_type opt_sh)
 {
@@ -360,6 +613,8 @@ output_unset_env(const shell_type opt_sh)
             printf("set -e SSH_AUTH_SOCK;\n");
             printf("set -e SSH_PAGEANT_PID;\n");
             break;
+		case UNKNOWN:
+			break;
     }
 }
 
@@ -383,6 +638,8 @@ output_set_env(const shell_type opt_sh, const int p_set_pid_env, const char *esc
             if (p_set_pid_env)
                 printf("set -x SSH_PAGEANT_PID %d;\n", pid);
             break;
+		case UNKNOWN:
+			break;
     }
 }
 
@@ -398,6 +655,7 @@ parse_shell_option(const char *shell_name)
         return BOURNE;
     } else {
         errx(1, "unrecognized shell \"%s\"", shell_name);
+		return UNKNOWN;  // not reached
     }
 }
 
@@ -409,20 +667,34 @@ main(int argc, char *argv[])
         { "help", no_argument, 0, 'h' },
         { "version", no_argument, 0, 'v' },
         { "reuse", no_argument, 0, 'r' },
+		{ "helper", required_argument, 0, 'H' },
         { 0, 0, 0, 0 }
     };
 
     int sockfd = -1;
 
     int opt;
-    int opt_debug = 0;
     int opt_quiet = 0;
     int opt_kill = 0;
     int opt_reuse = 0;
     int opt_lifetime = 0;
+	char exec_dir[PATH_MAX];
+	ssize_t exec_dir_len;
     shell_type opt_sh = get_shell_guess();
 
-    while ((opt = getopt_long(argc, argv, "+hvcsS:kdqa:rt:",
+	exec_dir_len = readlink("/proc/self/exe", exec_dir, PATH_MAX - 1);
+	if (exec_dir_len > 0) {
+		exec_dir[exec_dir_len] = 0;
+		strcpy(exec_dir, dirname(exec_dir));
+	}
+	else {
+		strcpy(exec_dir, ".");
+	}
+
+	// Assume that the helper binary is next to the main executable
+	snprintf(win32_helper_path, PATH_MAX, "%s/%s", exec_dir, "helper.exe");
+
+    while ((opt = getopt_long(argc, argv, "+hvcsS:kdqa:rt:H:",
                               long_options, NULL)) != -1)
         switch (opt) {
             case 'h':
@@ -438,6 +710,7 @@ main(int argc, char *argv[])
                 printf("  -q             Enable quiet mode.\n");
                 printf("  -a SOCKET      Create socket on a specific path.\n");
                 printf("  -r, --reuse    Allow to reuse an existing -a SOCKET.\n");
+				printf("  -H, --helper   Path to the Win32 helper binary (default: %s).\n", win32_helper_path);
                 printf("  -t TIME        Limit key lifetime in seconds (not supported by Pageant).\n");
                 return 0;
 
@@ -490,6 +763,11 @@ main(int argc, char *argv[])
                 opt_lifetime = 1;
                 break;
 
+			case 'H':
+				if (realpath(optarg, win32_helper_path) == NULL)
+					err(1, "invalid helper path (use --helper to specify the Win32 helper path)");
+				break;
+
             case '?':
                 errx(1, "try --help for more information");
                 break;
@@ -520,15 +798,24 @@ main(int argc, char *argv[])
     if (opt_lifetime && !opt_quiet)
         warnx("option is not supported by Pageant -- t");
 
+	// Preflight the helper path
+	if (access(win32_helper_path, X_OK) < 0)
+		errx(1, "file %s is not an executable; use --helper to specify the Win32 helper path", win32_helper_path);
+
     signal(SIGINT, cleanup_signal);
     signal(SIGHUP, cleanup_signal);
     signal(SIGTERM, cleanup_signal);
+	signal(SIGPIPE, SIG_IGN);
 
     int p_sock_reused = opt_reuse && reuse_socket_path(sockpath);
     if (!p_sock_reused) {
         if (!sockpath[0])
             create_socket_path(sockpath, sizeof(sockpath));
         sockfd = open_auth_socket(sockpath);
+
+#if HELPER_EARLY_START
+		start_win32_helper();
+#endif
     }
 
     // If the sockpath is actually reused, don't daemonize, don't set
@@ -539,7 +826,7 @@ main(int argc, char *argv[])
 
     if (optind < argc) {
 		// Subcommand exeuction mode
-        const char **subargv = (const char **)argv + optind;
+        char * const* subargv = argv + optind;
         setenv("SSH_AUTH_SOCK", sockpath, 1);
         if (p_set_pid_env) {
             char pidstr[16];
@@ -547,8 +834,21 @@ main(int argc, char *argv[])
             setenv("SSH_PAGEANT_PID", pidstr, 1);
         }
         signal(SIGCHLD, cleanup_signal);
-        if (spawnvp(_P_NOWAIT, subargv[0], subargv) < 0)  // TODO: use posix_spawnp
-            cleanup_warn(argv[optind]);
+
+		// Have spawn clean up ignored signals
+		posix_spawnattr_t sp_attr;
+		sigset_t sp_sigs;
+		sigemptyset(&sp_sigs);
+		sigaddset(&sp_sigs, SIGPIPE);
+
+		posix_spawnattr_init(&sp_attr);
+		posix_spawnattr_setsigdefault(&sp_attr, &sp_sigs);
+		posix_spawnattr_setflags(&sp_attr, POSIX_SPAWN_SETSIGDEF);
+
+		if (posix_spawnp(&subcommand_pid, subargv[0], NULL, &sp_attr, subargv, environ) < 0)
+            cleanup_warn(subargv[0]);
+
+		posix_spawnattr_destroy(&sp_attr);
     }
     else {
 		// Daemon mode

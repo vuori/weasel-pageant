@@ -262,3 +262,6 @@ __pycache__/
 
 # Ubuntu headers (for IntelliSense)
 /linux/include
+
+# Release packages
+/*.zip

@@ -69,13 +69,31 @@
     <RemoteCCompileToolExe>gcc</RemoteCCompileToolExe>
     <RemoteLdToolExe>gcc</RemoteLdToolExe>
     <IncludePath>$(IncludePath);$(ProjectDir)include\x86_64-linux-gnu;$(ProjectDir)include;$(ISenseIncludePath)</IncludePath>
+    <TargetName>weasel-pageant</TargetName>
+    <TargetExt />
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(IncludePath);$(ProjectDir)include\x86_64-linux-gnu;$(ProjectDir)include;$(ISenseIncludePath)</IncludePath>
+    <TargetName>weasel-pageant</TargetName>
+    <TargetExt />
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="main.c" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="common.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\README.md" />
+  </ItemGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <PreprocessorDefinitions>_GNU_SOURCE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_GNU_SOURCE=1</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <PreprocessorDefinitions>_GNU_SOURCE=1</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

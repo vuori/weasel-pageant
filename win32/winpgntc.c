@@ -1,8 +1,9 @@
 /*
  * Pageant client code.
- * Copyright (C) 2009, 2011  Josh Stone
+ * Copyright 2017  Valtteri Vuorikoski
+ * Based on ssh-pageant, Copyright 2009, 2011  Josh Stone
  *
- * This file is part of ssh-pageant, and is free software: you can
+ * This file is part of weasel-pageant, and is free software: you can
  * redistribute it and/or modify it under the terms of the GNU General
  * Public License as published by the Free Software Foundation, either
  * version 3 of the License, or (at your option) any later version.
@@ -13,8 +14,11 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
+#include <WinSock2.h>
 #include <windows.h>
 
+#include "../linux/common.h"
 #include "winpgntc.h"
 
 #define AGENT_COPYDATA_ID 0x804e50ba   /* random goop */
@@ -58,10 +62,11 @@ get_user_sid(void)
 void
 agent_query(void *buf)
 {
-    HWND hwnd = FindWindow("Pageant", "Pageant");
+    HWND hwnd = FindWindow(L"Pageant", L"Pageant");
     if (hwnd) {
-        char mapname[] = "PageantRequest12345678";
-        sprintf(mapname, "PageantRequest%08x", (unsigned)GetCurrentThreadId());
+		// The mapping name needs to be ANSI or bad stuff happens
+		char mapname[] = "PageantRequest12345678";
+		sprintf_s(mapname, sizeof(mapname), "PageantRequest%08x", (unsigned)GetCurrentThreadId());
 
         PSECURITY_DESCRIPTOR psd = NULL;
         SECURITY_ATTRIBUTES sa, *psa = NULL;
@@ -81,9 +86,10 @@ agent_query(void *buf)
             }
         }
 
-        HANDLE filemap = CreateFileMapping(INVALID_HANDLE_VALUE, psa,
+        HANDLE filemap = CreateFileMappingA(INVALID_HANDLE_VALUE, psa,
                                            PAGE_READWRITE, 0,
                                            AGENT_MAX_MSGLEN, mapname);
+		BOOL need_free = 1;
 
         if (filemap != NULL && filemap != INVALID_HANDLE_VALUE) {
             void *p = MapViewOfFile(filemap, FILE_MAP_WRITE, 0, 0, 0);
@@ -91,12 +97,12 @@ agent_query(void *buf)
 
             COPYDATASTRUCT cds = {
                 .dwData = AGENT_COPYDATA_ID,
-                .cbData = 1 + strlen(mapname),
+                .cbData = 1 + (DWORD) strlen(mapname),
                 .lpData = mapname,
             };
 
-            int id = SendMessage(hwnd, WM_COPYDATA,
-                                 (WPARAM) NULL, (LPARAM) &cds);
+            LRESULT id = SendMessage(hwnd, WM_COPYDATA,
+                                     (WPARAM) NULL, (LPARAM) &cds);
 
             if (msglen(p) > AGENT_MAX_MSGLEN)
                 id = 0;
@@ -108,13 +114,16 @@ agent_query(void *buf)
             CloseHandle(filemap);
             LocalFree(psd);
             free(usersid);
+			need_free = 0;
 
             if (id > 0)
                 return;
         }
 
-        LocalFree(psd);
-        free(usersid);
+		if (need_free) {
+			LocalFree(psd);
+			free(usersid);
+		}
     }
 
     static const char reply_error[5] = { 0, 0, 0, 1, SSH_AGENT_FAILURE };
