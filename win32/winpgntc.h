@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-	void agent_query(void *buf);
+void agent_query(void *buf);
 
 #ifdef __cplusplus
 }

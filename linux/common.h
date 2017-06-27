@@ -21,9 +21,9 @@
 extern "C" {
 #endif
 
-	static inline uint32_t msglen(const void *p) {
-		return 4 + ntohl(*(const uint32_t *)p);
-	}
+    static inline uint32_t msglen(const void *p) {
+        return 4 + ntohl(*(const uint32_t *)p);
+    }
 
 #ifdef __cplusplus
 };

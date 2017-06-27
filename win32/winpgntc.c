@@ -64,9 +64,9 @@ agent_query(void *buf)
 {
     HWND hwnd = FindWindow(L"Pageant", L"Pageant");
     if (hwnd) {
-		// The mapping name needs to be ANSI or bad stuff happens
-		char mapname[] = "PageantRequest12345678";
-		sprintf_s(mapname, sizeof(mapname), "PageantRequest%08x", (unsigned)GetCurrentThreadId());
+        // The mapping name needs to be ANSI or bad stuff happens
+        char mapname[] = "PageantRequest12345678";
+        sprintf_s(mapname, sizeof(mapname), "PageantRequest%08x", (unsigned)GetCurrentThreadId());
 
         PSECURITY_DESCRIPTOR psd = NULL;
         SECURITY_ATTRIBUTES sa, *psa = NULL;
@@ -89,7 +89,7 @@ agent_query(void *buf)
         HANDLE filemap = CreateFileMappingA(INVALID_HANDLE_VALUE, psa,
                                            PAGE_READWRITE, 0,
                                            AGENT_MAX_MSGLEN, mapname);
-		BOOL need_free = 1;
+        BOOL need_free = 1;
 
         if (filemap != NULL && filemap != INVALID_HANDLE_VALUE) {
             void *p = MapViewOfFile(filemap, FILE_MAP_WRITE, 0, 0, 0);
@@ -114,16 +114,16 @@ agent_query(void *buf)
             CloseHandle(filemap);
             LocalFree(psd);
             free(usersid);
-			need_free = 0;
+            need_free = 0;
 
             if (id > 0)
                 return;
         }
 
-		if (need_free) {
-			LocalFree(psd);
-			free(usersid);
-		}
+        if (need_free) {
+            LocalFree(psd);
+            free(usersid);
+        }
     }
 
     static const char reply_error[5] = { 0, 0, 0, 1, SSH_AGENT_FAILURE };
