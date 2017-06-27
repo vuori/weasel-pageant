@@ -82,7 +82,7 @@ Using `weasel-pageant` is generally similar to using `ssh-agent` on Linux and
 similar operating systems. 
 
 1. Ensure that PuTTY's Pageant is running (and holds your SSH keys).
-    * ssh-pageant does not start Pageant itself.
+    * weasel-pageant does not start Pageant itself.
     * Recommended: Add Pageant to your Windows startup/Autostart configuration
       so it is always available.
 
