@@ -88,7 +88,7 @@ similar operating systems.
 
 2. Edit your `~/.bashrc` (or `~/.bash_profile`) to add the following:
 
-        eval $(<location where you unpacked the zip>/weasel-pageant -r -a "/tmp/.weasel-pageant-$USERNAME")
+        eval $(<location where you unpacked the zip>/weasel-pageant -r -a "/tmp/.weasel-pageant-$USER")
 
     To explain:
 
