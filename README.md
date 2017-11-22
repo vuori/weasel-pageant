@@ -33,9 +33,11 @@ are not sure of what you're doing, do not  allow remote access to your WSL envir
 **COMPATIBILITY NOTICE:** `weasel-pageant` does not, and will never work on
 a version of Windows 10 older than 1703 ("Creators Update"), because
 it requires the new [Windows/Ubuntu interoperability support](https://blogs.msdn.microsoft.com/wsl/2016/10/19/windows-and-ubuntu-interoperability/)
-feature shipped with version 1703 (compatibility with older Insider
-builds is unclear). Presumably it should work with newer Insider builds,
-but has not been tested on anything more recent than build 15063.413.
+feature shipped with version 1703. It has been verified to work with versions
+up to and including 1709 ("Fall Creators Update", build 16299.64).
+
+Non-Ubuntu distributions (available since 1709) have not been tested, but
+they should work as well. Please open a GitHub issue if something is broken.
 
 If you are still using Anniversary Update, you may be able to use the (unrelated)
 [wsl-ssh-pageant](https://github.com/benpye/wsl-ssh-pageant).
