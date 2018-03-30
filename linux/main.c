@@ -34,12 +34,6 @@
 
 #include "common.h"
 
-// WSL (at least as of CU) seems to have a strange problem with pipe passing
-// when multiple sockets are open (the handles are non-functional when they
-// arrive on the Win32 side). When this is defined, the helper is started
-// early and restart won't be attempted if the helper exits.
-//#define HELPER_EARLY_START 1
-
 // As of FCU (including earlier releases), a Win32 subprocess is in some
 // sort of relationship with the conhost of the window in which it was started.
 // Daemonizing breaks this, so disable it for now (weasel-pageant remains
@@ -113,11 +107,6 @@ cleanup_warn(const char *prefix)
 static void
 cleanup_win32(int need_wait)
 {
-#if HELPER_EARLY_START
-    // When early start is necessary we have no hope of restarting
-    warnx("win32 helper has stopped; bailing out");
-    cleanup_exit(1);
-#else
     if (win32_in > 0) {
         close(win32_in);
         win32_in = 0;
@@ -133,7 +122,6 @@ cleanup_win32(int need_wait)
         waitpid(win32_pid, NULL, 0);
 
     win32_pid = 0;
-#endif
 }
 
 
@@ -350,10 +338,8 @@ start_win32_helper()
 static int
 agent_query(void *buf)
 {
-#if !HELPER_EARLY_START
     if (start_win32_helper() != 0)
         return -1;
-#endif
 
     // Subprocess has been started (though it may still fail, but at least the spawn finished)
 
@@ -372,7 +358,6 @@ agent_query(void *buf)
             case EPIPE:
                 // The helper has closed its input; try to restart
                 cleanup_win32(1);
-#if !HELPER_EARLY_START
                 if (!first_done) {
                     warn("win32 helper had exited; trying to restart");
                     if (start_win32_helper() != 0)
@@ -380,7 +365,6 @@ agent_query(void *buf)
                     first_done = 1;  // not actually done, but don't retry infinitely
                     continue;
                 }
-#endif
                 warn("win32 helper exited during query (write); aborting");
                 return -1;
 
@@ -493,11 +477,13 @@ agent_send(int fd, struct fd_buf *p)
     return 1;
 }
 
+
 // Two WSL problems require us to use a weird pseudo-daemon mode:
 //  1. Detaching from the parent terminal breaks Win32 process communication
 //  2. Session members are not sent a SIGHUP when the controlling terminal goes away (may be fixed post-FCU)
 // Therefore, we need this one weird hack where we keep checking if our
-// controlling terminal is gone. If it is, exit.
+// controlling terminal is gone. If it is, exit since talking to the
+// helper would hang.
 static void
 check_tty_gone()
 {
@@ -516,6 +502,7 @@ check_tty_gone()
         // We are still attached to a terminal
         close(fd);
 }
+
 
 static void
 do_agent_loop(int sockfd)
@@ -858,10 +845,6 @@ main(int argc, char *argv[])
         if (!sockpath[0])
             create_socket_path(sockpath, sizeof(sockpath));
         sockfd = open_auth_socket(sockpath);
-
-#if HELPER_EARLY_START
-        start_win32_helper();
-#endif
     }
 
     // If the sockpath is actually reused, don't daemonize, don't set
