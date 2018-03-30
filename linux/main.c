@@ -38,7 +38,13 @@
 // when multiple sockets are open (the handles are non-functional when they
 // arrive on the Win32 side). When this is defined, the helper is started
 // early and restart won't be attempted if the helper exits.
-#define HELPER_EARLY_START 1
+//#define HELPER_EARLY_START 1
+
+// As of FCU (including earlier releases), a Win32 subprocess is in some
+// sort of relationship with the conhost of the window in which it was started.
+// Daemonizing breaks this, so disable it for now (weasel-pageant remains
+// attached to the tty that started it and receives SIGHUP).
+//#define REAL_DAEMONIZE 1
 
 #define FD_FOREACH(fd, set) \
     for (fd = 0; fd < FD_SETSIZE; ++fd) \
@@ -54,6 +60,7 @@ struct fd_buf {
 static int opt_debug = 0;
 
 static pid_t subcommand_pid = 0;
+static int need_tty_check = 0;
 static pid_t win32_pid = 0;
 static int win32_in = -1;  // input from the win32 helper (connected to its stdout)
 static int win32_out = -1;  // output to the win32 helper (connected to its stdin)
@@ -133,6 +140,8 @@ cleanup_win32(int need_wait)
 static void
 cleanup_signal(int sig)
 {
+    debug_print("received signal %d", sig);
+
     // Most caught signals are basically just treated as exit notifiers,
     // but when a child exits, copy its exit status so ssh-pageant is more
     // effective as a command wrapper.
@@ -484,6 +493,29 @@ agent_send(int fd, struct fd_buf *p)
     return 1;
 }
 
+// Two WSL problems require us to use a weird pseudo-daemon mode:
+//  1. Detaching from the parent terminal breaks Win32 process communication
+//  2. Session members are not sent a SIGHUP when the controlling terminal goes away (may be fixed post-FCU)
+// Therefore, we need this one weird hack where we keep checking if our
+// controlling terminal is gone. If it is, exit.
+static void
+check_tty_gone()
+{
+    if (!need_tty_check)
+        return;
+
+    int fd = open("/dev/tty", O_RDONLY);
+    if (fd < 0) {
+        if (errno == ENOTTY)
+            // Controlling terminal is gone
+            cleanup_exit(0);
+        else
+            warnx("checking controlling terminal failed");
+    }
+    else
+        // We are still attached to a terminal
+        close(fd);
+}
 
 static void
 do_agent_loop(int sockfd)
@@ -499,8 +531,22 @@ do_agent_loop(int sockfd)
     while (1) {
         fd_set do_read_set = read_set;
         fd_set do_write_set = write_set;
-        if (select(FD_SETSIZE, &do_read_set, &do_write_set, NULL, NULL) < 0)
+        struct timeval timeout = { 1, 0 }, *timeoutp;
+        int ready_fds;
+
+        if (need_tty_check)
+            timeoutp = &timeout;
+        else
+            timeoutp = NULL;
+
+        if ((ready_fds = select(FD_SETSIZE, &do_read_set, &do_write_set, NULL, timeoutp)) < 0)
             cleanup_warn("select");
+
+        if (ready_fds == 0) {
+            // select timed out
+            check_tty_gone();
+            continue;
+        }
 
         if (FD_ISSET(sockfd, &do_read_set)) {
             int s = accept4(sockfd, NULL, NULL, SOCK_CLOEXEC);
@@ -852,7 +898,17 @@ main(int argc, char *argv[])
     }
     else {
         // Daemon mode
-        pid_t pid = p_daemonize ? fork() : getpid();
+        pid_t pid;
+        if (p_daemonize) {
+#if !REAL_DAEMONIZE
+            need_tty_check = 1;
+#endif
+            pid = fork();
+        } else {
+            // Run both of the following forks in the same process.
+            pid = getpid();
+        }
+
         if (pid < 0)
             cleanup_warn("fork");
         if (pid > 0) {
@@ -866,12 +922,19 @@ main(int argc, char *argv[])
             if (p_daemonize)
                 return 0;
         }
+#if REAL_DAEMONIZE // otherwise remain attached to the tty and die with it
         else if (setsid() < 0)
             cleanup_warn("setsid");
         else
             fclose(stderr);
+#endif
     }
+
+    // If we close stdin, Win32 processes fail to receive a (seemingly unrelated) pipe as their stdin
+#if REAL_DAEMONIZE
     fclose(stdin);
+#endif
+    // But for whatever reason closing stdout is fine
     fclose(stdout);
 
     if (!p_sock_reused)
