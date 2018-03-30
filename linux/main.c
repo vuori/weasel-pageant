@@ -125,6 +125,25 @@ cleanup_win32(int need_wait)
 }
 
 
+static int
+wait_subcommand(int flags)
+{
+    int status = -1;
+
+    if (waitpid(subcommand_pid, &status, flags) < 0)
+        return status;
+
+    if (WIFEXITED(status))
+        status = WEXITSTATUS(status);
+    else if (WIFSIGNALED(status))
+        status = 128 + WTERMSIG(status);
+    else
+        status = 0;
+
+    return status;
+}
+
+
 static void
 cleanup_signal(int sig)
 {
@@ -135,12 +154,8 @@ cleanup_signal(int sig)
     // effective as a command wrapper.
     int status = 0;
     if (sig == SIGCHLD) {
-        if (subcommand_pid > 0 && waitpid(subcommand_pid, &status, WNOHANG) > 0) {
-            // The subcommand exited. Fall through to cleanup.
-            if (WIFEXITED(status))
-                status = WEXITSTATUS(status);
-            else if (WIFSIGNALED(status))
-                status = 128 + WTERMSIG(status);
+        if (subcommand_pid > 0 && (status = wait_subcommand(WNOHANG)) > 0) {
+            // Fall through to exit.
         }
         else if (win32_pid > 0 && waitpid(win32_pid, NULL, WNOHANG) > 0) {
             // The win32 helper process exited. Clean up after it, the message handler
@@ -879,7 +894,8 @@ main(int argc, char *argv[])
             snprintf(pidstr, sizeof(pidstr), "%d", getpid());
             setenv("SSH_PAGEANT_PID", pidstr, 1);
         }
-        signal(SIGCHLD, cleanup_signal);
+        if (!p_sock_reused)
+            signal(SIGCHLD, cleanup_signal);
 
         // Have spawn clean up ignored signals
         posix_spawnattr_t sp_attr;
@@ -937,8 +953,13 @@ main(int argc, char *argv[])
     // But for whatever reason closing stdout is fine
     fclose(stdout);
 
+    int status = 0;
     if (!p_sock_reused)
+        // Run main loop and wait for agent connections
         do_agent_loop(sockfd);
+    else if (subcommand_pid > 0)
+        // Reused socket in subcommand mode: 
+        status = wait_subcommand(0);
 
-    return 0;
+    return status;
 }
