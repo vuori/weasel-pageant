@@ -219,6 +219,10 @@ reuse_socket_path(const char* sockpath)
     struct sockaddr_un addr;
     int fd;
 
+    if (!sockpath[0])
+        // No path
+        return 0;
+
     fd = socket(PF_LOCAL, SOCK_STREAM | SOCK_CLOEXEC, 0);
     if (fd < 0)
         cleanup_warn("socket");
@@ -232,6 +236,7 @@ reuse_socket_path(const char* sockpath)
     }
     else if (errno == ENOENT) {
         close(fd);
+        debug_print("reuse_socket_path: socket %s not present", sockpath);
         return 0;
     }
     else if (errno == ECONNREFUSED) {
@@ -244,6 +249,8 @@ reuse_socket_path(const char* sockpath)
             close(fd);
             return 0;
         }
+
+        debug_print("reuse_socket_path: socket %s not present", sockpath);
 
         // Restore the errno before warning out.
         errno = ECONNREFUSED;
@@ -696,6 +703,7 @@ int
 main(int argc, char *argv[])
 {
     char sockpath[PATH_MAX] = "";
+    int sockpath_from_env = 0;
     static struct option long_options[] = {
         { "help", no_argument, 0, 'h' },
         { "version", no_argument, 0, 'v' },
@@ -826,7 +834,16 @@ main(int argc, char *argv[])
     }
 
     if (opt_reuse && !sockpath[0])
-        errx(1, "socket reuse requires specifying -a SOCKET");
+    {
+        // If a fixed socket path was not specified, check if there is
+        // a socket set in the environment. Its validity will be checked
+        // later.
+        char *env_sockpath = getenv("SSH_AUTH_SOCK");
+        if (env_sockpath && strlen(env_sockpath) < PATH_MAX) {
+            strcpy(sockpath, env_sockpath);
+            sockpath_from_env = 1;
+        }
+    }
 
     if (opt_lifetime && !opt_quiet)
         warnx("option is not supported by Pageant -- t");
@@ -842,7 +859,7 @@ main(int argc, char *argv[])
 
     int p_sock_reused = opt_reuse && reuse_socket_path(sockpath);
     if (!p_sock_reused) {
-        if (!sockpath[0])
+        if (!sockpath[0] || sockpath_from_env)
             create_socket_path(sockpath, sizeof(sockpath));
         sockfd = open_auth_socket(sockpath);
     }
