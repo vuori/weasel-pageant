@@ -110,15 +110,15 @@ cleanup_win32(int need_wait)
 {
     if (win32_in > 0) {
         close(win32_in);
-        win32_in = 0;
+        win32_in = -1;
     }
 
     if (win32_out > 0) {
         close(win32_out);
-        win32_out = 0;
+        win32_out = -1;
     }
 
-    // used is used by the query function if it detects an EOF
+    // Used by the query function if it detects an EOF
     if (need_wait && win32_pid > 0)
         waitpid(win32_pid, NULL, 0);
 
@@ -148,8 +148,6 @@ wait_subcommand(int flags)
 static void
 cleanup_signal(int sig)
 {
-    debug_print("received signal %d", sig);
-
     // Most caught signals are basically just treated as exit notifiers,
     // but when a child exits, copy its exit status so ssh-pageant is more
     // effective as a command wrapper.
@@ -162,6 +160,11 @@ cleanup_signal(int sig)
             // The win32 helper process exited. Clean up after it, the message handler
             // will restart it.
             cleanup_win32(0);
+            return;
+        }
+        else {
+            // This shouldn't happen.
+            debug_print("received SIGCHLD for unknown child");
             return;
         }
     }
@@ -285,7 +288,7 @@ start_win32_helper()
     char *cwd;
     int result = 0;
 
-    if (win32_in > 0 && win32_out > 0)
+    if (win32_in >= 0 && win32_out >= 0)
         return result;  // already running
 
     // Serialize flags to child
@@ -377,6 +380,8 @@ agent_query(void *buf)
         if (cnt < 0) {
             switch (errno) {
             case EINTR:
+                if (win32_out < 0)
+                    return -1;  // helper had died and signal handler cleaned up
                 continue;
 
             case EPIPE:
@@ -413,6 +418,8 @@ agent_query(void *buf)
         if (cnt < 0) {
             switch (errno) {
             case EINTR:
+                if (win32_in < 0)
+                    return -1;  // helper had died and signal handler cleaned up
                 continue;
 
             default:
@@ -921,7 +928,8 @@ main(int argc, char *argv[])
         pid_t pid;
         if (p_daemonize) {
             pid = fork();
-        } else {
+        }
+        else {
             // Run both of the following forks in the same process.
             pid = getpid();
         }
@@ -942,8 +950,15 @@ main(int argc, char *argv[])
 #if REAL_DAEMONIZE // if !REAL_DAEMONIZE remain attached to the tty and die with it
         else if (setsid() < 0)
             cleanup_warn("setsid");
-        else
+        else {
             fclose(stderr);
+            // Set up SIGCHLD handler to catch the helper process exiting
+            signal(SIGCHLD, cleanup_signal);
+        }
+#else
+        else
+            // Set up SIGCHLD handler to catch the helper process exiting
+            signal(SIGCHLD, cleanup_signal);
 #endif
     }
 
