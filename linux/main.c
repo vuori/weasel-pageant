@@ -1,7 +1,7 @@
 /*
  * weasel-pageant Linux-side main code.
  * 
- * Copyright 2017  Valtteri Vuorikoski
+ * Copyright 2017, 2018  Valtteri Vuorikoski
  * Based on ssh-pageant, Copyright 2009-2015  Josh Stone
  *
  * This file is part of weasel-pageant, and is free software: you can
@@ -36,8 +36,10 @@
 
 // As of FCU (including earlier releases), a Win32 subprocess is in some
 // sort of relationship with the conhost of the window in which it was started.
-// Daemonizing breaks this, so disable it for now (weasel-pageant remains
-// attached to the tty that started it and receives SIGHUP).
+//
+// Daemonizing breaks this, so disable it is disabled for now. weasel-pageant remains
+// attached to the tty that started it and exits when it goes away. The daemonization
+// code is left here in case things improve in future Windows releases.
 //#define REAL_DAEMONIZE 1
 
 #define FD_FOREACH(fd, set) \
@@ -54,7 +56,6 @@ struct fd_buf {
 static int opt_debug = 0;
 
 static pid_t subcommand_pid = 0;
-static int need_tty_check = 0;
 static pid_t win32_pid = 0;
 static int win32_in = -1;  // input from the win32 helper (connected to its stdout)
 static int win32_out = -1;  // output to the win32 helper (connected to its stdin)
@@ -325,7 +326,8 @@ start_win32_helper()
     // Restore the original working directory. It would be nice if spawn() supported
     // this directly.
     if (cwd != NULL) {
-        chdir(cwd);
+        if (chdir(cwd) < 0)
+            warn("failed to restore cwd");
         free(cwd);
     }
 
@@ -509,9 +511,7 @@ agent_send(int fd, struct fd_buf *p)
 static void
 check_tty_gone()
 {
-    if (!need_tty_check)
-        return;
-
+#if !REAL_DAEMONIZE
     int fd = open("/dev/tty", O_RDONLY);
     if (fd < 0) {
         if (errno == ENOTTY)
@@ -523,6 +523,7 @@ check_tty_gone()
     else
         // We are still attached to a terminal
         close(fd);
+#endif
 }
 
 
@@ -540,16 +541,19 @@ do_agent_loop(int sockfd)
     while (1) {
         fd_set do_read_set = read_set;
         fd_set do_write_set = write_set;
-        struct timeval timeout = { 1, 0 }, *timeoutp;
+#if REAL_DAEMONIZE
+        struct timeval *timeoutp = NULL;
+#else
+        struct timeval timeout = { 1, 0 }, *timeoutp = &timeout;
+#endif
         int ready_fds;
 
-        if (need_tty_check)
-            timeoutp = &timeout;
-        else
-            timeoutp = NULL;
-
-        if ((ready_fds = select(FD_SETSIZE, &do_read_set, &do_write_set, NULL, timeoutp)) < 0)
-            cleanup_warn("select");
+        if ((ready_fds = select(FD_SETSIZE, &do_read_set, &do_write_set, NULL, timeoutp)) < 0) {
+            if (errno == EINTR)
+                continue;
+            else
+                cleanup_warn("select");
+        }
 
         if (ready_fds == 0) {
             // select timed out
@@ -771,8 +775,8 @@ main(int argc, char *argv[])
                 return 0;
 
             case 'v':
-                printf("weasel-pageant 1.0\n");
-                printf("Copyright 2017  Valtteri Vuorikoski\n");
+                printf("weasel-pageant 1.1.1\n");
+                printf("Copyright 2017, 2018  Valtteri Vuorikoski\n");
                 printf("Based on ssh-pageant, copyright 2009-2014  Josh Stone\n");
                 printf("License GPLv3+: GNU GPL version 3 or later"
                        " <http://gnu.org/licenses/gpl.html>.\n");
@@ -916,9 +920,6 @@ main(int argc, char *argv[])
         // Daemon mode
         pid_t pid;
         if (p_daemonize) {
-#if !REAL_DAEMONIZE
-            need_tty_check = 1;
-#endif
             pid = fork();
         } else {
             // Run both of the following forks in the same process.
@@ -938,7 +939,7 @@ main(int argc, char *argv[])
             if (p_daemonize)
                 return 0;
         }
-#if REAL_DAEMONIZE // otherwise remain attached to the tty and die with it
+#if REAL_DAEMONIZE // if !REAL_DAEMONIZE remain attached to the tty and die with it
         else if (setsid() < 0)
             cleanup_warn("setsid");
         else
@@ -946,7 +947,8 @@ main(int argc, char *argv[])
 #endif
     }
 
-    // If we close stdin, Win32 processes fail to receive a (seemingly unrelated) pipe as their stdin
+    // If we close stdin, Win32 processes fail to receive a (seemingly unrelated) pipe as their stdin.
+    // Thus skip close until if/when this gets fixed in WSL.
 #if REAL_DAEMONIZE
     fclose(stdin);
 #endif
