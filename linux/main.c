@@ -153,7 +153,7 @@ cleanup_signal(int sig)
     // effective as a command wrapper.
     int status = 0;
     if (sig == SIGCHLD) {
-        if (subcommand_pid > 0 && (status = wait_subcommand(WNOHANG)) > 0) {
+        if (subcommand_pid > 0 && (status = wait_subcommand(WNOHANG)) >= 0) {
             // Fall through to exit.
         }
         else if (win32_pid > 0 && waitpid(win32_pid, NULL, WNOHANG) > 0) {
@@ -163,9 +163,10 @@ cleanup_signal(int sig)
             return;
         }
         else {
-            // This shouldn't happen.
-            debug_print("received SIGCHLD for unknown child");
-            return;
+            // This shouldn't happen. Exit in case subcommand tracking failed (this
+            // is what we silently did before).
+            debug_print("received SIGCHLD for unknown child (subcommand_pid=%d win32_pid=%d)", subcommand_pid, win32_pid);
+            status = 55;
         }
     }
     cleanup_exit(status);
