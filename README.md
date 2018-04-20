@@ -18,9 +18,10 @@ WSL side a Win32 helper program which interfaces with Pageant and communicating 
 it through pipes.
 
 It is probably the most useful if your SSH keys can't be copied to the WSL environment,
-such as when using a smart card for SSH authentication. Both Pageant-CAC and Gpg4win
-have been tested. Note that when using Gpg4win, only the SSH agent part will be
-forwarded. There is no support for forwarding the GPG agent socket.
+such as when using a smart card for SSH authentication. Testing is mainly performed
+with Pageant-CAC, though Gpg4win has been seen to work in the past. Note that when
+using Gpg4win, only the SSH agent part will be forwarded. There is no support for
+forwarding the GPG agent socket.
 
 **SECURITY NOTICE:** All the usual security caveats applicable to WSL apply.
 Most importantly, all interaction with the Win32 world happens with the credentials of
@@ -94,9 +95,9 @@ similar operating systems.
 
     To explain:
 
-    * This leverages the `-r`/`--reuse` option in combination with `-a SOCKET`,
-      which will only start a new daemon if the specified path does not accept connections
-      already.  If the socket appears to be active, it will just set `SSH_AUTH_SOCK` and exit.
+    * This leverages the `-r`/`--reuse` option which will only start a new daemon if
+      one is not already running in the current window. If the agent socket appears to
+      be active, it will just print environment variables and exit.
 
     * Using `eval` will set the environment variables in the current shell.
       By default, `weasel-pageant` tries to detect the current shell and output
@@ -111,12 +112,12 @@ similar operating systems.
 A previous version of this manual suggested using the `-a` flag to set a fixed
 socket path which could be reused by all open WSL consoles. Due to the limitations of
 WSL-Win32 interop, this would cause problems including hanging SSH agent connections
-and hanging `conhost` processes in some use cases.
+and hanging `conhost` processes in many use cases.
 
 Therefore, unless you have a specific need for it, *the `-a` flag should be removed
 from your `weasel-pageant` startup command*. A `weasel-pageant` instance will then
 be started for each WSL console you open, but will be reused by any sub-shells
-of that window (assuming `-r` was given).
+of that window (when `-r` is given).
 
 ## Options
 
@@ -164,11 +165,20 @@ to your shell initialization files (e.g. `.bashrc`).
   **Upgrade note:** remove the `-a` flag from the `weasel-pageant` command line unless you
   know you need it.
 
-## Contributions
+## Bug reports and contributions
 
-Please send bug reports using Github's [issues feature](https://github.com/vuori/weasel-pageant/issues).
+Bug reports may be sent using Github's [issues feature](https://github.com/vuori/weasel-pageant/issues).
+Include your `weasel-pageant` version and command line, describe how to reproduce the problem,
+and include logs from running in debug mode if possible: run `weasel-pageant` with the `-d` flag
+in either subprocess mode or in a separate terminal in daemon mode (copy/paste the environment
+variables to your main terminal).
+
+Please do not send bug reports by e-mail.
+
 Pull requests are also welcome, though if you intend to do major changes it's recommended to open an
 issue first.
+
+
 
 ------------------------------------------------------------------------------
 Copyright 2017, 2018  Valtteri Vuorikoski
