@@ -42,6 +42,8 @@
 // code is left here in case things improve in future Windows releases.
 //#define REAL_DAEMONIZE 1
 
+#define VERSION "1.2b1"
+
 #define FD_FOREACH(fd, set) \
     for (fd = 0; fd < FD_SETSIZE; ++fd) \
         if (FD_ISSET(fd, set))
@@ -784,7 +786,7 @@ main(int argc, char *argv[])
                 return 0;
 
             case 'v':
-                printf("weasel-pageant 1.1.1\n");
+                printf("weasel-pageant " VERSION "\n");
                 printf("Copyright 2017, 2018  Valtteri Vuorikoski\n");
                 printf("Based on ssh-pageant, copyright 2009-2014  Josh Stone\n");
                 printf("License GPLv3+: GNU GPL version 3 or later"
