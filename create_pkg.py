@@ -1,7 +1,7 @@
 #
 # weasel-pageant packaging script.
 # 
-# Copyright 2017  Valtteri Vuorikoski
+# Copyright 2017, 2018  Valtteri Vuorikoski
 #
 # This file is part of weasel-pageant, and is free software: you can
 # redistribute it and/or modify it under the terms of the GNU General
@@ -11,8 +11,9 @@
  
 import sys
 import zipfile
+import re
 
-CURRENT_VERSION = '1.1'
+CURRENT_VERSION = 'unknown'
 
 try:
   reltype = sys.argv[1]
@@ -22,6 +23,13 @@ except IndexError:
 if reltype not in ('release', 'debug'):
   print('usage: create_pkg release|debug', file=sys.stderr)
   sys.exit(1)
+
+# Autodetect version from the source
+with open('linux/main.c', 'r') as fp:
+  for line in fp:
+    m = re.match(r'#define VERSION "([^"]+)', line)
+    if m:
+      CURRENT_VERSION = m.group(1)
 
 manifest = [
   'COPYING',
