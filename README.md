@@ -164,6 +164,7 @@ to your shell initialization files (e.g. `.bashrc`).
 * 2018-03-30: 1.1 - Fixed console/agent connection hangs and enabled restarting of the helper.
   **Upgrade note:** remove the `-a` flag from the `weasel-pageant` command line unless you
   know you need it.
+* 2018-12-28: 1.2b1 (test release) - Probably fixed unexpected exits due to signal handling bug.
 
 ## Bug reports and contributions
 
