@@ -165,7 +165,8 @@ cleanup_signal(int sig)
         else {
             // This shouldn't happen. Exit in case subcommand tracking failed (this
             // is what we silently did before).
-            debug_print("received SIGCHLD for unknown child (subcommand_pid=%d win32_pid=%d)", subcommand_pid, win32_pid);
+            fprintf(stderr, "received SIGCHLD for unknown child (subcommand_pid=%d win32_pid=%d)",
+                    subcommand_pid, win32_pid);
             status = 55;
         }
     }
@@ -526,7 +527,7 @@ check_tty_gone()
             // Controlling terminal is gone
             cleanup_exit(0);
         else
-            warnx("checking controlling terminal failed");
+            warn("checking controlling terminal failed");
     }
     else
         // We are still attached to a terminal
