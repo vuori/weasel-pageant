@@ -958,6 +958,11 @@ main(int argc, char *argv[])
             signal(SIGCHLD, cleanup_signal);
         }
 #else
+        // Detach from process group but not the session to keep the controlling
+        // tty but avoid receiving the foreground process group's signals. See
+        // comments for check_tty_gone on why these tricks are needed.
+        else if (setpgid(0, 0) < 0)
+            cleanup_warn("setpgid");
         else
             // Set up SIGCHLD handler to catch the helper process exiting
             signal(SIGCHLD, cleanup_signal);
