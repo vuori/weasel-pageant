@@ -29,19 +29,13 @@ the user who started the WSL environment. In practice, *if you allow someone els
 log in to your WSL environment remotely, they may be able to access the SSH keys stored in
 your Pageant with `weasel-pageant`.* This is a fundamental feature of WSL; if you
 are not sure of what you're doing, do not allow remote access to your WSL environment
-(i.e. by starting an SSH server).
+(e.g. by starting an SSH server).
 
-**COMPATIBILITY NOTICE:** `weasel-pageant` does not, and will never work on
-a version of Windows 10 older than 1703 ("Creators Update"), because
-it requires the new [Windows/Ubuntu interoperability support](https://blogs.msdn.microsoft.com/wsl/2016/10/19/windows-and-ubuntu-interoperability/)
-feature shipped with version 1703. It has been verified to work with versions
-up to and including 1709 ("Fall Creators Update").
-
-Non-Ubuntu distributions (available since 1709) have not been tested, but
-they should work as well. Please open a GitHub issue if something is broken.
-
-If you are still using Anniversary Update, you may be able to use the (unrelated)
-[wsl-ssh-pageant](https://github.com/benpye/wsl-ssh-pageant).
+`weasel-pageant` does not work on a version of Windows 10 older
+than 1703 ("Creators Update"), because it requires the
+[Windows/Ubuntu interoperability support](https://blogs.msdn.microsoft.com/wsl/2016/10/19/windows-and-ubuntu-interoperability/)
+feature shipped with that version. It has been verified to work with versions
+up to and including 1809 ("October 2018 Update").
 
 ## Installation
 
@@ -49,10 +43,11 @@ If you are still using Anniversary Update, you may be able to use the (unrelated
 
 Download the zip file from the [releases page](https://github.com/vuori/weasel-pageant/releases)
 and unpack it in a convenient location *on the Windows part of your drive*.
+
 Because WSL can only execute Win32 binaries from `drvfs` locations, `weasel-pageant`
 *will not work* if unpacked inside the WSL filesystem (onto an `lxfs` mount).
-(Advanced users may place only `helper.exe` on `drvfs`, but in general it is easier
-to keep the pieces together.)
+Advanced users may place only `helper.exe` on `drvfs`, but in general it is easier
+to keep the pieces together.
 
 ### From source
 
@@ -66,7 +61,7 @@ A VS2017 project is included. You will need the "Desktop development with C++" a
    `/usr/include` into `linux/include` under the project directory.
    This is not required for the build, but will make Intellisense more useful.
 
-3. Hit Build Solution and both the Linux executable and the Win32 helper will be built.
+3. Hit Build Solution. Both the Linux executable and the Win32 helper will be built.
 
 If you want to create a binary package, you can use the `create_pkg.py` script
 at the root of the project. This should work with Python 3.4 or newer on either
@@ -77,7 +72,7 @@ Visual Studio for the Win32 helper (no Makefile or similar is supplied at the mo
 In theory the helper should be buildable with MinGW-w64 for a fully Linux-based
 build, but this has not been tested.
 
-The release binaries have been built with VS2017 15.6.0 Preview 5.0.
+The release binaries have been built with VS2017 15.9.4 Preview 1.0.
 
 ## Usage
 
@@ -164,7 +159,7 @@ to your shell initialization files (e.g. `.bashrc`).
 * 2018-03-30: 1.1 - Fixed console/agent connection hangs and enabled restarting of the helper.
   **Upgrade note:** remove the `-a` flag from the `weasel-pageant` command line unless you
   know you need it.
-* 2018-12-28: 1.2b1 (test release) - Probably fixed unexpected exits due to signal handling bug.
+* 2019-01-06: 1.2 - Fixed unexpected daemon exits caused by a signal handling issue.
 
 ## Bug reports and contributions
 
@@ -179,10 +174,23 @@ Please do not send bug reports by e-mail.
 Pull requests are also welcome, though if you intend to do major changes it's recommended to open an
 issue first.
 
+## Related projects
+
+There are several projects that provide similar functionality (I have not tested all
+of these):
+
+  * [ssh-pageant](https://github.com/cuviper/ssh-pageant): the Cygwin program on
+    which `weasel-pageant` is based on.
+  * [wsl-ssh-pageant](https://github.com/benpye/wsl-ssh-pageant): a Win32 app that
+    uses the Unix domain socket support introduced in Windows 10 1803 to provide
+    agent connectivity.
+  * [ssh-agent-wsl](https://github.com/rupor-github/ssh-agent-wsl): a fork of
+    `weasel-pageant` that includes support for using keys held by Microsoft's
+    SSH Agent service.
 
 
 ------------------------------------------------------------------------------
-Copyright 2017, 2018  Valtteri Vuorikoski
+Copyright 2017-2019  Valtteri Vuorikoski
 
 Based on `ssh-pageant`, copyright (C) 2009-2014  Josh Stone  
 

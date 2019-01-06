@@ -1,7 +1,7 @@
 /*
  * weasel-pageant Linux-side main code.
  * 
- * Copyright 2017, 2018  Valtteri Vuorikoski
+ * Copyright 2017-2019  Valtteri Vuorikoski
  * Based on ssh-pageant, Copyright 2009-2015  Josh Stone
  *
  * This file is part of weasel-pageant, and is free software: you can
@@ -42,7 +42,7 @@
 // code is left here in case things improve in future Windows releases.
 //#define REAL_DAEMONIZE 1
 
-#define VERSION "1.2b1"
+#define VERSION "1.2"
 
 #define FD_FOREACH(fd, set) \
     for (fd = 0; fd < FD_SETSIZE; ++fd) \
@@ -787,7 +787,7 @@ main(int argc, char *argv[])
 
             case 'v':
                 printf("weasel-pageant " VERSION "\n");
-                printf("Copyright 2017, 2018  Valtteri Vuorikoski\n");
+                printf("Copyright 2017-2019  Valtteri Vuorikoski\n");
                 printf("Based on ssh-pageant, copyright 2009-2014  Josh Stone\n");
                 printf("License GPLv3+: GNU GPL version 3 or later"
                        " <http://gnu.org/licenses/gpl.html>.\n");
