@@ -56,6 +56,7 @@ struct fd_buf {
 };
 
 static int opt_debug = 0;
+static int tty_gone = 0;
 
 static pid_t subcommand_pid = 0;
 static pid_t win32_pid = 0;
@@ -523,11 +524,16 @@ static void
 check_tty_gone()
 {
 #if !REAL_DAEMONIZE
+    if (tty_gone)
+        return;
     int fd = open("/dev/tty", O_RDONLY);
     if (fd < 0) {
-        if (errno == ENOTTY)
-            // Controlling terminal is gone
-            cleanup_exit(0);
+        if (errno == ENOTTY) {
+            // Controlling terminal is gone, kill the helper process so the parent conhost can exit
+            if (win32_pid > 0 && kill(win32_pid, SIGTERM) < 0)
+                err(1, "kill(%d)", win32_pid);
+            tty_gone = 1;
+        }
         else
             warn("checking controlling terminal failed");
     }
