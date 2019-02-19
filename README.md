@@ -133,6 +133,7 @@ of that window (when `-r` is given).
       -r, --reuse    Allow to reuse an existing -a SOCKET.
       -H, --helper   Path to the Win32 helper binary (default: /mnt/c/Program Files/weasel-pageant/helper.exe).
       -t TIME        Limit key lifetime in seconds (not supported by Pageant).
+      -b             Do not exit when tty closes (only use on Windows 10 version 1809 and newer).
 
 By default, the Win32 helper will be searched for in the same directory where `weasel-pageant`
 is stored. If you have placed it elsewhere, the `-H` flag can be used to set the location.
@@ -142,7 +143,8 @@ is stored. If you have placed it elsewhere, the `-H` flag can be used to set the
 * If you have an `SSH_AUTH_SOCK` variable set inside `screen`, `tmux` or similar,
   you exit the WSL console from which the `screen` was *initially started* and attach
   to the session from another window, the agent connection will not be usable. This is
-  due to WSL/Win32 interop limitations.
+  due to WSL/Win32 interop limitations. This can be circumvented on Windows 10 version
+  1809 and newer by adding the `-b` flag to the `weasel-pageant` command line.
 
 * There is a slight delay when exiting a WSL console before the window actually closes.
   This is due to a polling loop which works around a WSL incompatibility with Unix session
