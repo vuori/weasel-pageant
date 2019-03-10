@@ -80,7 +80,7 @@ Using `weasel-pageant` is generally similar to using `ssh-agent` on Linux and
 similar operating systems. 
 
 1. Ensure that PuTTY's Pageant is running (and holds your SSH keys).
-    * weasel-pageant does not start Pageant itself.
+    * `weasel-pageant` does not start Pageant itself.
     * Recommended: Add Pageant to your Windows startup/Autostart configuration
       so it is always available.
 
@@ -106,13 +106,18 @@ similar operating systems.
 
 A previous version of this manual suggested using the `-a` flag to set a fixed
 socket path which could be reused by all open WSL consoles. Due to the limitations of
-WSL-Win32 interop, this would cause problems including hanging SSH agent connections
-and hanging `conhost` processes in many use cases.
+WSL-Win32 interop, this causes problems including hanging SSH agent connections
+and hanging `conhost` processes in many use cases. Unless you have a specific need
+for a fixed socket path, it is better to remove the `-a` flag froom your `weasel-pageant`
+startup command. A `weasel-pageant` instance will then be started for each WSL console
+you open.
 
-Therefore, unless you have a specific need for it, *the `-a` flag should be removed
-from your `weasel-pageant` startup command*. A `weasel-pageant` instance will then
-be started for each WSL console you open, but will be reused by any sub-shells
-of that window (when `-r` is given).
+However, with Windows 10 version 1809 or newer, it is now possible to use a fixed
+socket path reliably. In addition to the `-a` flag, also set the `-b` to prevent
+the `weasel-pageant` process from exiting with its parent console. For example
+to create a persistent socket in your home directory:
+
+    eval $(<location where you unpacked the zip>/weasel-pageant -rb -a $HOME/.weasel-pageant.sock)
 
 ## Options
 
@@ -136,7 +141,8 @@ of that window (when `-r` is given).
       -b             Do not exit when tty closes (only use on Windows 10 version 1809 and newer).
 
 By default, the Win32 helper will be searched for in the same directory where `weasel-pageant`
-is stored. If you have placed it elsewhere, the `-H` flag can be used to set the location.
+is installed. If you have placed `helper.exe` elsewhere, the `-H` flag can be used to set the
+location.
 
 ## Known issues
 
@@ -162,6 +168,9 @@ to your shell initialization files (e.g. `.bashrc`).
   **Upgrade note:** remove the `-a` flag from the `weasel-pageant` command line unless you
   know you need it.
 * 2019-01-06: 1.2 - Fixed unexpected daemon exits caused by a signal handling issue.
+* 2019-03-10: 1.3 - Added the `-b` flag to prevent the daemon from exiting when its
+  parent terminal closes. Requires Windows 10 1809 or newer. Thanks to @niklasholm for
+  the patch.
 
 ## Bug reports and contributions
 
@@ -192,7 +201,7 @@ of these):
 
 
 ------------------------------------------------------------------------------
-Copyright 2017-2019  Valtteri Vuorikoski
+Copyright 2017-2019  Valtteri Vuorikoski & contributors
 
 Based on `ssh-pageant`, copyright (C) 2009-2014  Josh Stone  
 
