@@ -42,7 +42,7 @@
 // code is left here in case things improve in future Windows releases.
 //#define REAL_DAEMONIZE 1
 
-#define VERSION "1.2"
+#define VERSION "1.3"
 
 #define FD_FOREACH(fd, set) \
     for (fd = 0; fd < FD_SETSIZE; ++fd) \
@@ -793,15 +793,15 @@ main(int argc, char *argv[])
                 printf("  -d             Enable debug mode.\n");
                 printf("  -q             Enable quiet mode.\n");
                 printf("  -a SOCKET      Create socket on a specific path.\n");
+                printf("  -b             Do not exit when tty closes (only use on Windows 10 version 1809 and newer).\n");
                 printf("  -r, --reuse    Allow to reuse an existing -a SOCKET.\n");
                 printf("  -H, --helper   Path to the Win32 helper binary (default: %s).\n", win32_helper_path);
                 printf("  -t TIME        Limit key lifetime in seconds (not supported by Pageant).\n");
-                printf("  -b             Do not exit when tty closes (only use on Windows 10 version 1809 and newer).\n");
                 return 0;
 
             case 'v':
                 printf("weasel-pageant " VERSION "\n");
-                printf("Copyright 2017-2019  Valtteri Vuorikoski\n");
+                printf("Copyright 2017-2019  Valtteri Vuorikoski & contributors\n");
                 printf("Based on ssh-pageant, copyright 2009-2014  Josh Stone\n");
                 printf("License GPLv3+: GNU GPL version 3 or later"
                        " <http://gnu.org/licenses/gpl.html>.\n");
