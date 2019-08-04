@@ -42,7 +42,7 @@
 // code is left here in case things improve in future Windows releases.
 //#define REAL_DAEMONIZE 1
 
-#define VERSION "1.3"
+#define VERSION "1.4"
 
 #define FD_FOREACH(fd, set) \
     for (fd = 0; fd < FD_SETSIZE; ++fd) \

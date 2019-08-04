@@ -35,7 +35,7 @@ are not sure of what you're doing, do not allow remote access to your WSL enviro
 than 1703 ("Creators Update"), because it requires the
 [Windows/Ubuntu interoperability support](https://blogs.msdn.microsoft.com/wsl/2016/10/19/windows-and-ubuntu-interoperability/)
 feature shipped with that version. It has been verified to work with versions
-up to and including 1809 ("October 2018 Update").
+up to and including Windows 10 release 1903.
 
 ## Installation
 
@@ -51,11 +51,11 @@ to keep the pieces together.
 
 ### From source
 
-A VS2017 project is included. You will need the "Desktop development with C++" and
-"Linux development with C++" features.
+A VS2019 project is included. You will need the "Desktop development with C++" and
+"Linux development with C++" features. To build:
 
-1. In VS2017, set up a connection to your WSL environment (or a remote Linux machine)
-   in Options → Cross Platform → Connection Manager.
+1. Optional: In VS2017, set up an SSH connection to a Linux machine. If you want
+   to build using your local WSL environment, the default configuration should work.
 
 2. Optional: If you intend to work on the Linux sources, copy the contents of
    `/usr/include` into `linux/include` under the project directory.
@@ -72,7 +72,7 @@ Visual Studio for the Win32 helper (no Makefile or similar is supplied at the mo
 In theory the helper should be buildable with MinGW-w64 for a fully Linux-based
 build, but this has not been tested.
 
-The release binaries have been built with VS2017 15.9.4 Preview 1.0.
+The release binaries have been built with VS2019 16.2.0.
 
 ## Usage
 
@@ -171,6 +171,9 @@ to your shell initialization files (e.g. `.bashrc`).
 * 2019-03-10: 1.3 - Added the `-b` flag to prevent the daemon from exiting when its
   parent terminal closes. Requires Windows 10 1809 or newer. Thanks to @niklasholm for
   the patch.
+* 2019-08-04: 1.4 - Added a workaround for a Win32 interop bug in Windows 10 1903 that wedged
+  the WSL init process into an infinite loop. Also switched to static linking the Linux
+  binary for compatibility with non-glibc distributions such as Alpine.
 
 ## Bug reports and contributions
 
