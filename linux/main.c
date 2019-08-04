@@ -517,7 +517,7 @@ agent_send(int fd, struct fd_buf *p)
 
 // Two WSL problems require us to use a weird pseudo-daemon mode:
 //  1. Detaching from the parent terminal breaks Win32 process communication
-//  2. Session members are not sent a SIGHUP when the controlling terminal goes away (may be fixed post-FCU)
+//  2. Session members are not sent a SIGHUP when the controlling terminal goes away
 // Therefore, we need this one weird hack where we keep checking if our
 // controlling terminal is gone. If it is, exit since talking to the
 // helper would hang.
@@ -530,14 +530,19 @@ check_tty_gone()
     int fd = open("/dev/tty", O_RDONLY);
     if (fd < 0) {
         if (errno == ENOTTY) {
+			// Controlling terminal is gone, kill the helper process so the parent conhost can exit.
+			// The helper needs to be explicitly killed on Windows release 1903 to work around a bug
+			// in Win32 interop that leaves a process hanging.
+			if (win32_pid > 0 && kill(win32_pid, SIGTERM) < 0)
+				err(1, "kill(%d)", win32_pid);
+
             if (opt_no_exit) {
-                // Controlling terminal is gone, kill the helper process so the parent conhost can exit
-                if (win32_pid > 0 && kill(win32_pid, SIGTERM) < 0)
-                    err(1, "kill(%d)", win32_pid);
+				// Note that the original tty was gone and we don't need to check for it any more.
+				// This allows operating in a pseudo-daemon mode on Windows release 1809 and later
+				// (enabled with the -b flag)..
                 tty_gone = 1;
             }
             else {
-                // Controlling terminal is gone
                 cleanup_exit(0);
             }
         }
