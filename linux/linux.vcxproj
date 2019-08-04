@@ -45,16 +45,17 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'" Label="Configuration">
     <UseDebugLibraries>true</UseDebugLibraries>
-    <RemoteRootDir>~/src/vs</RemoteRootDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x86'" Label="Configuration">
     <UseDebugLibraries>false</UseDebugLibraries>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WSL_1_0</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WSL_1_0</PlatformToolset>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings" />
@@ -62,11 +63,9 @@
   <ImportGroup Label="PropertySheets" />
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x86'">
-    <RemoteCCompileToolExe>gcc</RemoteCCompileToolExe>
     <RemoteLdToolExe>gcc</RemoteLdToolExe>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <RemoteCCompileToolExe>gcc</RemoteCCompileToolExe>
     <RemoteLdToolExe>gcc</RemoteLdToolExe>
     <IncludePath>$(IncludePath);$(ProjectDir)include\x86_64-linux-gnu;$(ProjectDir)include;$(ISenseIncludePath)</IncludePath>
     <TargetName>weasel-pageant</TargetName>
@@ -76,6 +75,7 @@
     <IncludePath>$(IncludePath);$(ProjectDir)include\x86_64-linux-gnu;$(ProjectDir)include;$(ISenseIncludePath)</IncludePath>
     <TargetName>weasel-pageant</TargetName>
     <TargetExt />
+    <RemoteLdToolExe>gcc</RemoteLdToolExe>
   </PropertyGroup>
   <ItemGroup>
     <ClCompile Include="main.c" />
@@ -90,11 +90,17 @@
     <ClCompile>
       <PreprocessorDefinitions>_GNU_SOURCE=1</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <AdditionalOptions>-static</AdditionalOptions>
+    </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
       <PreprocessorDefinitions>_GNU_SOURCE=1</PreprocessorDefinitions>
     </ClCompile>
+    <Link>
+      <AdditionalOptions>-static</AdditionalOptions>
+    </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
