@@ -54,7 +54,7 @@ to keep the pieces together.
 A VS2019 project is included. You will need the "Desktop development with C++" and
 "Linux development with C++" features. To build:
 
-1. Optional: In VS2017, set up an SSH connection to a Linux machine. If you want
+1. Optional: In Visual Studio, set up an SSH connection to a Linux machine. If you want
    to build using your local WSL environment, the default configuration should work.
 
 2. Optional: If you intend to work on the Linux sources, copy the contents of
