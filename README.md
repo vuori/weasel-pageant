@@ -1,6 +1,20 @@
 ﻿weasel-pageant
 --------------
 
+**End of life notice:** Native support for Unix domain sockets appeared nearly two years ago
+in Windows 10 1803. At this point it no longer makes sense to maintain `weasel-pageant`, which relies
+on the older pipe-based and bug-prone WSL-Win32 interop method. Therefore, with the exception of critical
+security patches, *support for `weasel-pageant` will cease on April 14, 2020*; this date is also the EOL
+for Windows 10 1709, the last desktop edition of Windows without support for Unix domain sockets.
+
+Users are advised to migrate to more modern equivalents. I use
+[WinCryptSSHAgent](https://github.com/buptczq/WinCryptSSHAgent), which offers convenient
+support for PIV smartcard certificates. [wsl-ssh-pageant](https://github.com/benpye/wsl-ssh-pageant)
+appears to offer a more traditional alternative for Pageant users, but I have not tested it myself.
+
+Thanks to all the users over the years and happy SSH'ing.
+---
+
 `weasel-pageant` allows you to use SSH keys held by [PuTTY's](https://www.chiark.greenend.org.uk/~sgtatham/putty/)
 Pageant "daemon" (or compatible, such as the version of Pageant included in 
 [PuTTY-CAC](https://github.com/NoMoreFood/putty-cac) or the SSH agent mode in
@@ -35,7 +49,7 @@ are not sure of what you're doing, do not allow remote access to your WSL enviro
 than 1703 ("Creators Update"), because it requires the
 [Windows/Ubuntu interoperability support](https://blogs.msdn.microsoft.com/wsl/2016/10/19/windows-and-ubuntu-interoperability/)
 feature shipped with that version. It has been verified to work with versions
-up to and including Windows 10 release 1903.
+up to and including Windows 10 release 1909.
 
 ## Installation
 
