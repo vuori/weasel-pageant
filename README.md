@@ -1,7 +1,7 @@
-﻿weasel-pageant
---------------
+﻿weasel-pageant development has ended
+------------------------------------
 
-**End of life notice:** Native support for Unix domain sockets appeared nearly two years ago
+**End of life notice:** Native support for Unix domain sockets appeared over two years ago
 in Windows 10 1803. At this point it no longer makes sense to maintain `weasel-pageant`, which relies
 on the older pipe-based and bug-prone WSL-Win32 interop method. Therefore, with the exception of critical
 security patches, *support for `weasel-pageant` will cease on April 14, 2020*; this date is also the EOL
@@ -11,6 +11,14 @@ Users are advised to migrate to more modern equivalents. I use
 [WinCryptSSHAgent](https://github.com/buptczq/WinCryptSSHAgent), which offers convenient
 support for PIV smartcard certificates. [wsl-ssh-pageant](https://github.com/benpye/wsl-ssh-pageant)
 appears to offer a more traditional alternative for Pageant users, but I have not tested it myself.
+
+*Update, Apr 14 2020*: The EOL date has arrived and hence the issue tracker will be closed.
+
+Extended support policy: if you believe you have found a significant security issue in `weasel-pageant`,
+please send me e-mail or open a PR with a proposed solution. Non-security-related issues will not be fixed.
+The date for final end of support shall be *June 14, 2020*, after which this repository will be archived.
+
+All users are advised to upgrade to a supported alternative as soon as possible.
 
 Thanks to all the users over the years and happy SSH'ing.
 ---
