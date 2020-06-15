@@ -9,14 +9,14 @@ for Windows 10 1709, the last desktop edition of Windows without support for Uni
 
 Users are advised to migrate to more modern equivalents. I use
 [WinCryptSSHAgent](https://github.com/buptczq/WinCryptSSHAgent), which offers convenient
-support for PIV smartcard certificates. [wsl-ssh-pageant](https://github.com/benpye/wsl-ssh-pageant)
-appears to offer a more traditional alternative for Pageant users, but I have not tested it myself.
+support for PIV smartcard certificates and also promises WSL2/Hyper-V support in the latest
+version. [wsl-ssh-pageant](https://github.com/benpye/wsl-ssh-pageant) appears to offer a more
+traditional alternative for Pageant users, but I have not tested it myself.
 
-*Update, Apr 14 2020*: The EOL date has arrived and hence the issue tracker will be closed.
+*Update, Apr 14 2020*: The EOL date has arrived and hence the issue tracker will be closed. Extended support
+for security issues continues until June 14, 2020.
 
-Extended support policy: if you believe you have found a significant security issue in `weasel-pageant`,
-please send me e-mail or open a PR with a proposed solution. Non-security-related issues will not be fixed.
-The date for final end of support shall be *June 14, 2020*, after which this repository will be archived.
+*Update, Jun 15 2020*: Final end of support date has passed. No further changes will be accepted.
 
 All users are advised to upgrade to a supported alternative as soon as possible.
 
